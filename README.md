@@ -1,39 +1,72 @@
-{
-  "name": "react-example",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build",
-    "preview": "vite preview",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
-    "start": "node server.ts"
-  },
-  "dependencies": {
-    "@google/genai": "^1.29.0",
-    "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
-    "better-sqlite3": "^12.4.1",
-    "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
-    "dotenv": "^17.2.3",
-    "express": "^4.21.2",
-    "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwind-merge": "^3.5.0",
-    "vite": "^6.2.0"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^22.14.0",
-    "autoprefixer": "^10.4.21",
-    "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
-  }
-}
+# Smart Study Planner 📚
+
+An intelligent, AI-powered study timetable generator designed to help students optimize their exam preparation. Smart Study Planner prioritizes subjects based on exam dates, generates personalized study schedules using the Gemini API, and tracks daily progress.
+
+![App Screenshot](https://picsum.photos/seed/study/1200/600)
+
+## ✨ Features
+
+- **🤖 AI Schedule Generation**: Uses Google's Gemini API to create a balanced study plan tailored to your exam dates and priorities.
+- **📅 Subject Management**: Track all your subjects, exam dates, and priority levels in one place.
+- **⏱️ Task Tracking**: Stay on top of your study sessions with a detailed daily schedule.
+- **✅ Integrated To-Do List**: Manage non-study tasks and general reminders alongside your academic schedule.
+- **📊 Progress Dashboard**: Get a high-level view of your daily focus, pending tasks, and upcoming exam priorities.
+- **🌓 Dark/Light Mode**: Beautifully crafted editorial-style UI that adapts to your preference.
+- **📱 Responsive Design**: Fully optimized for both desktop and mobile devices.
+
+## 🚀 Tech Stack
+
+- **Frontend**: React, TypeScript, Tailwind CSS, Motion (Framer Motion), Lucide React.
+- **Backend**: Node.js, Express.
+- **Database**: SQLite (Better-SQLite3).
+- **AI**: Google Gemini API (@google/genai).
+- **Build Tool**: Vite.
+
+## 🛠️ Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- npm
+
+### Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-username/smart-study-planner.git
+   cd smart-study-planner
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Set up environment variables**:
+   Create a `.env` file in the root directory and add your Gemini API key:
+   ```env
+   GEMINI_API_KEY=your_api_key_here
+   ```
+
+4. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
+
+5. **Open the app**:
+   Navigate to `http://localhost:3000` in your browser.
+
+## 📖 Usage
+
+1. **Add Subjects**: Go to the "Subjects" tab and enter your subject names and exam dates.
+2. **Generate Schedule**: Navigate to the "Schedule" tab and click "Generate Schedule". The AI will analyze your subjects and create a plan.
+3. **Manage To-Dos**: Use the "To-Do List" tab for general tasks.
+4. **Track Progress**: Check the "Dashboard" daily to see your "Today's Focus" and upcoming priorities.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+Built with ❤️ using Sahil, Pratham, Raghav, Nitin.
