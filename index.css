@@ -1,0 +1,778 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Calendar, 
+  Plus, 
+  Trash2, 
+  Pencil,
+  CheckCircle2, 
+  Circle, 
+  BookOpen, 
+  Clock, 
+  AlertCircle,
+  ChevronRight,
+  LayoutDashboard,
+  ListTodo,
+  Sun,
+  Moon
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { format, parseISO, isToday, isFuture, differenceInDays } from 'date-fns';
+import { cn } from './lib/utils';
+import { Subject, StudyTask, Todo } from './types';
+
+export default function App() {
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [tasks, setTasks] = useState<StudyTask[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newSubject, setNewSubject] = useState({ name: '', examDate: '' });
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [newTask, setNewTask] = useState({ title: '', date: format(new Date(), 'yyyy-MM-dd'), durationMinutes: 60, subjectId: '' });
+  const [newTodoText, setNewTodoText] = useState('');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'subjects' | 'tasks' | 'todos'>('dashboard');
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark' || 
+        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const fetchData = async () => {
+    try {
+      const [scheduleRes, todosRes] = await Promise.all([
+        fetch('/api/schedule'),
+        fetch('/api/todos')
+      ]);
+      const scheduleData = await scheduleRes.json();
+      const todosData = await todosRes.json();
+      
+      setSubjects(scheduleData.subjects || []);
+      setTasks(scheduleData.tasks || []);
+      setTodos(todosData || []);
+    } catch (err) {
+      console.error("Failed to fetch data", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const addSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubject.name || !newSubject.examDate) return;
+
+    try {
+      if (editingSubject) {
+        const res = await fetch(`/api/subjects/${editingSubject.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSubject),
+        });
+        if (res.ok) {
+          setNewSubject({ name: '', examDate: '' });
+          setEditingSubject(null);
+          fetchData();
+        }
+      } else {
+        const res = await fetch('/api/subjects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSubject),
+        });
+        if (res.ok) {
+          setNewSubject({ name: '', examDate: '' });
+          fetchData();
+        }
+      }
+    } catch (err) {
+      console.error("Failed to save subject", err);
+    }
+  };
+
+  const startEditing = (subject: Subject) => {
+    setEditingSubject(subject);
+    setNewSubject({ name: subject.name, examDate: subject.examDate });
+  };
+
+  const cancelEditing = () => {
+    setEditingSubject(null);
+    setNewSubject({ name: '', examDate: '' });
+  };
+
+  const deleteSubject = async (id: number) => {
+    try {
+      await fetch(`/api/subjects/${id}`, { method: 'DELETE' });
+      fetchData();
+    } catch (err) {
+      console.error("Failed to delete subject", err);
+    }
+  };
+
+  const toggleTask = async (id: number) => {
+    try {
+      const res = await fetch(`/api/tasks/${id}/toggle`, { method: 'POST' });
+      if (res.ok) {
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, isCompleted: !t.isCompleted } : t));
+      }
+    } catch (err) {
+      console.error("Failed to toggle task", err);
+    }
+  };
+
+  const addTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTask.title && !newTask.subjectId) return;
+
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newTask,
+          subjectId: newTask.subjectId ? parseInt(newTask.subjectId) : null
+        }),
+      });
+      if (res.ok) {
+        setNewTask({ title: '', date: format(new Date(), 'yyyy-MM-dd'), durationMinutes: 60, subjectId: '' });
+        fetchData();
+      }
+    } catch (err) {
+      console.error("Failed to add task", err);
+    }
+  };
+
+  const deleteTask = async (id: number) => {
+    try {
+      await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+      setTasks(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      console.error("Failed to delete task", err);
+    }
+  };
+
+  const addTodo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTodoText.trim()) return;
+
+    try {
+      const res = await fetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: newTodoText }),
+      });
+      if (res.ok) {
+        setNewTodoText('');
+        fetchData();
+      }
+    } catch (err) {
+      console.error("Failed to add todo", err);
+    }
+  };
+
+  const toggleTodo = async (id: number) => {
+    try {
+      const res = await fetch(`/api/todos/${id}/toggle`, { method: 'POST' });
+      if (res.ok) {
+        setTodos(prev => prev.map(t => t.id === id ? { ...t, isCompleted: !t.isCompleted } : t));
+      }
+    } catch (err) {
+      console.error("Failed to toggle todo", err);
+    }
+  };
+
+  const deleteTodo = async (id: number) => {
+    try {
+      await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+      setTodos(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      console.error("Failed to delete todo", err);
+    }
+  };
+
+  const generateSchedule = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/generate-schedule', { method: 'POST' });
+      fetchData();
+    } catch (err) {
+      console.error("Failed to generate schedule", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const todayTasks = tasks.filter(t => isToday(parseISO(t.date)));
+  const upcomingTasks = tasks.filter(t => isFuture(parseISO(t.date)));
+  const completedCount = tasks.filter(t => t.isCompleted).length;
+  const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+
+  if (loading && subjects.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F0] dark:bg-[#1A1A1A] flex items-center justify-center transition-colors duration-300">
+        <div className="animate-pulse text-[#5A5A40] dark:text-[#A5A58D] font-serif italic text-xl">Loading your study plan...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F5F5F0] dark:bg-[#1A1A1A] text-[#1A1A1A] dark:text-[#F5F5F0] font-sans transition-colors duration-300">
+      {/* Sidebar / Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-0 md:w-64 bg-white dark:bg-[#2A2A2A] border-t md:border-t-0 md:border-r border-[#5A5A40]/10 dark:border-white/5 z-50 transition-colors duration-300">
+        <div className="p-6 hidden md:block">
+          <h1 className="text-2xl font-serif italic font-bold text-[#5A5A40] dark:text-[#A5A58D]">StudyFlow</h1>
+          <p className="text-xs text-[#5A5A40]/60 dark:text-[#A5A58D]/60 uppercase tracking-widest mt-1">Smart Planner</p>
+        </div>
+        
+        <div className="flex md:flex-col p-2 md:p-4 gap-2">
+          <NavButton 
+            active={activeTab === 'dashboard'} 
+            onClick={() => setActiveTab('dashboard')}
+            icon={<LayoutDashboard size={20} />}
+            label="Dashboard"
+          />
+          <NavButton 
+            active={activeTab === 'subjects'} 
+            onClick={() => setActiveTab('subjects')}
+            icon={<BookOpen size={20} />}
+            label="Subjects"
+          />
+          <NavButton 
+            active={activeTab === 'tasks'} 
+            onClick={() => setActiveTab('tasks')}
+            icon={<ListTodo size={20} />}
+            label="Schedule"
+          />
+          <NavButton 
+            active={activeTab === 'todos'} 
+            onClick={() => setActiveTab('todos')}
+            icon={<CheckCircle2 size={20} />}
+            label="To-Do List"
+          />
+          
+          <div className="mt-auto hidden md:block pt-4 border-t border-[#5A5A40]/10 dark:border-white/5">
+            <button 
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[#5A5A40]/60 dark:text-[#A5A58D]/60 hover:bg-[#5A5A40]/5 dark:hover:bg-white/5 transition-all"
+            >
+              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+              <span className="text-sm font-medium">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
+            </button>
+          </div>
+          
+          {/* Mobile Theme Toggle */}
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="flex-none p-3 md:hidden text-[#5A5A40]/60 dark:text-[#A5A58D]/60"
+          >
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="md:ml-64 p-6 pb-24 md:pb-6 max-w-5xl mx-auto">
+        <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' && (
+            <motion.div 
+              key="dashboard"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              <header>
+                <h2 className="text-4xl font-serif font-light text-[#1A1A1A] dark:text-[#F5F5F0]">Welcome back,</h2>
+                <p className="text-[#5A5A40] dark:text-[#A5A58D] italic">Here's your study overview for today.</p>
+              </header>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard 
+                  title="Overall Progress" 
+                  value={`${progress}%`} 
+                  subtitle={`${completedCount} of ${tasks.length} tasks done`}
+                  color="bg-emerald-50 dark:bg-emerald-950/20"
+                />
+                <StatCard 
+                  title="Active Subjects" 
+                  value={subjects.length.toString()} 
+                  subtitle="Subjects in rotation"
+                  color="bg-blue-50 dark:bg-blue-950/20"
+                />
+                <StatCard 
+                  title="Today's Tasks" 
+                  value={todayTasks.length.toString()} 
+                  subtitle={`${todayTasks.filter(t => t.isCompleted).length} completed`}
+                  color="bg-orange-50 dark:bg-orange-950/20"
+                />
+                <StatCard 
+                  title="Pending To-Dos" 
+                  value={todos.filter(t => !t.isCompleted).length.toString()} 
+                  subtitle={`${todos.filter(t => t.isCompleted).length} completed`}
+                  color="bg-purple-50 dark:bg-purple-950/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Today's Focus */}
+                <section className="bg-white dark:bg-[#2A2A2A] rounded-[32px] p-8 shadow-sm border border-black/5 dark:border-white/5 transition-colors duration-300">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-serif italic text-[#5A5A40] dark:text-[#A5A58D]">Today's Focus</h3>
+                    <Calendar size={20} className="text-[#5A5A40]/40 dark:text-[#A5A58D]/40" />
+                  </div>
+                  
+                  {todayTasks.length > 0 || todos.filter(t => !t.isCompleted).length > 0 ? (
+                    <div className="space-y-6">
+                      {todayTasks.length > 0 && (
+                        <div className="space-y-3">
+                          <p className="text-[10px] uppercase tracking-widest font-bold text-[#5A5A40]/40 dark:text-[#A5A58D]/40 px-2">Study Sessions</p>
+                          {todayTasks.map((task: StudyTask) => (
+                            <TaskItem key={task.id} task={task} onToggle={toggleTask} onDelete={deleteTask} />
+                          ))}
+                        </div>
+                      )}
+                      
+                      {todos.filter(t => !t.isCompleted).length > 0 && (
+                        <div className="space-y-3">
+                          <p className="text-[10px] uppercase tracking-widest font-bold text-[#5A5A40]/40 dark:text-[#A5A58D]/40 px-2">General Tasks</p>
+                          {todos.filter(t => !t.isCompleted).map(todo => (
+                            <TodoItem key={todo.id} todo={todo} onToggle={toggleTodo} onDelete={deleteTodo} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <p className="text-[#5A5A40]/60 dark:text-[#A5A58D]/60 italic">No tasks scheduled for today.</p>
+                      <button 
+                        onClick={generateSchedule}
+                        className="mt-4 text-sm font-medium text-[#5A5A40] dark:text-[#A5A58D] underline underline-offset-4 hover:text-[#1A1A1A] dark:hover:text-[#F5F5F0]"
+                      >
+                        Generate new schedule
+                      </button>
+                    </div>
+                  )}
+                </section>
+
+                {/* Priorities */}
+                <section className="bg-white dark:bg-[#2A2A2A] rounded-[32px] p-8 shadow-sm border border-black/5 dark:border-white/5 transition-colors duration-300">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-serif italic text-[#5A5A40] dark:text-[#A5A58D]">Exam Priorities</h3>
+                    <AlertCircle size={20} className="text-[#5A5A40]/40 dark:text-[#A5A58D]/40" />
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {subjects.slice(0, 4).map(subject => {
+                      const daysLeft = differenceInDays(parseISO(subject.examDate), new Date());
+                      return (
+                        <div key={subject.id} className="flex items-center justify-between p-4 rounded-2xl bg-[#F5F5F0]/50 dark:bg-white/5">
+                          <div>
+                            <p className="font-medium">{subject.name}</p>
+                            <p className="text-xs text-[#5A5A40]/60 dark:text-[#A5A58D]/60">Exam on {format(parseISO(subject.examDate), 'MMM d, yyyy')}</p>
+                          </div>
+                          <div className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            daysLeft < 7 ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" : "bg-[#5A5A40]/10 dark:bg-white/10 text-[#5A5A40] dark:text-[#A5A58D]"
+                          )}>
+                            {daysLeft} days left
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {subjects.length === 0 && (
+                      <p className="text-center py-12 text-[#5A5A40]/60 dark:text-[#A5A58D]/60 italic">Add subjects to see priorities.</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'subjects' && (
+            <motion.div 
+              key="subjects"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-8"
+            >
+              <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-4xl font-serif font-light text-[#1A1A1A] dark:text-[#F5F5F0]">Subjects</h2>
+                  <p className="text-[#5A5A40] dark:text-[#A5A58D] italic">Manage your courses and exam dates.</p>
+                </div>
+              </header>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Add/Edit Subject Form */}
+                <div className="lg:col-span-1">
+                  <form onSubmit={addSubject} className="bg-white dark:bg-[#2A2A2A] rounded-[32px] p-8 shadow-sm border border-black/5 dark:border-white/5 sticky top-6 transition-colors duration-300">
+                    <h3 className="text-lg font-serif italic text-[#5A5A40] dark:text-[#A5A58D] mb-6">
+                      {editingSubject ? 'Edit Subject' : 'Add New Subject'}
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-widest font-bold text-[#5A5A40]/60 dark:text-[#A5A58D]/60 mb-1">Subject Name</label>
+                        <input 
+                          type="text" 
+                          value={newSubject.name}
+                          onChange={e => setNewSubject(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="e.g. Advanced Mathematics"
+                          className="w-full px-4 py-3 rounded-xl bg-[#F5F5F0] dark:bg-white/5 border-transparent focus:bg-white dark:focus:bg-white/10 focus:border-[#5A5A40]/20 dark:focus:border-white/20 focus:ring-0 transition-all text-[#1A1A1A] dark:text-[#F5F5F0]"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-widest font-bold text-[#5A5A40]/60 dark:text-[#A5A58D]/60 mb-1">Exam Date</label>
+                        <input 
+                          type="date" 
+                          value={newSubject.examDate}
+                          onChange={e => setNewSubject(prev => ({ ...prev, examDate: e.target.value }))}
+                          className="w-full px-4 py-3 rounded-xl bg-[#F5F5F0] dark:bg-white/5 border-transparent focus:bg-white dark:focus:bg-white/10 focus:border-[#5A5A40]/20 dark:focus:border-white/20 focus:ring-0 transition-all text-[#1A1A1A] dark:text-[#F5F5F0] [color-scheme:light] dark:[color-scheme:dark]"
+                          required
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          type="submit"
+                          className="flex-1 py-4 bg-[#5A5A40] dark:bg-[#A5A58D] text-white dark:text-[#1A1A1A] rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-[#4A4A30] dark:hover:bg-[#B5B59D] transition-colors"
+                        >
+                          {editingSubject ? <CheckCircle2 size={18} /> : <Plus size={18} />}
+                          {editingSubject ? 'Update Subject' : 'Add Subject'}
+                        </button>
+                        {editingSubject && (
+                          <button 
+                            type="button"
+                            onClick={cancelEditing}
+                            className="px-4 py-4 bg-[#F5F5F0] dark:bg-white/5 text-[#5A5A40] dark:text-[#A5A58D] rounded-xl font-medium hover:bg-[#E5E5E0] dark:hover:bg-white/10 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Subjects List */}
+                <div className="lg:col-span-2 space-y-4">
+                  {subjects.map(subject => (
+                    <div key={subject.id} className="bg-white dark:bg-[#2A2A2A] rounded-2xl p-6 flex items-center justify-between shadow-sm border border-black/5 dark:border-white/5 group transition-colors duration-300">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-[#F5F5F0] dark:bg-white/5 flex items-center justify-center text-[#5A5A40] dark:text-[#A5A58D]">
+                          <BookOpen size={20} />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-lg">{subject.name}</h4>
+                          <div className="flex items-center gap-3 text-sm text-[#5A5A40]/60 dark:text-[#A5A58D]/60">
+                            <span className="flex items-center gap-1">
+                              <Calendar size={14} />
+                              {format(parseISO(subject.examDate), 'MMM d, yyyy')}
+                            </span>
+                            <span className="w-1 h-1 rounded-full bg-[#5A5A40]/20 dark:bg-white/20" />
+                            <span>{differenceInDays(parseISO(subject.examDate), new Date())} days until exam</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button 
+                          onClick={() => startEditing(subject)}
+                          className="p-2 text-[#5A5A40] dark:text-[#A5A58D] hover:bg-[#F5F5F0] dark:hover:bg-white/5 rounded-lg"
+                        >
+                          <Pencil size={18} />
+                        </button>
+                        <button 
+                          onClick={() => deleteSubject(subject.id)}
+                          className="p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {subjects.length === 0 && (
+                    <div className="text-center py-20 bg-white/50 dark:bg-white/5 rounded-[32px] border border-dashed border-[#5A5A40]/20 dark:border-white/10 transition-colors duration-300">
+                      <p className="text-[#5A5A40]/60 dark:text-[#A5A58D]/60 italic">No subjects added yet.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'tasks' && (
+            <motion.div 
+              key="tasks"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="space-y-8"
+            >
+              <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-4xl font-serif font-light text-[#1A1A1A] dark:text-[#F5F5F0]">Study Schedule</h2>
+                  <p className="text-[#5A5A40] dark:text-[#A5A58D] italic">Your personalized daily study plan.</p>
+                </div>
+                <button 
+                  onClick={generateSchedule}
+                  className="px-6 py-3 bg-white dark:bg-[#2A2A2A] border border-[#5A5A40]/20 dark:border-white/10 rounded-xl text-[#5A5A40] dark:text-[#A5A58D] font-medium flex items-center gap-2 hover:bg-[#F5F5F0] dark:hover:bg-white/5 transition-colors"
+                >
+                  <Calendar size={18} />
+                  Regenerate Schedule
+                </button>
+              </header>
+
+              {/* Quick Add Task */}
+              <div className="bg-white dark:bg-[#2A2A2A] rounded-[32px] p-8 shadow-sm border border-black/5 dark:border-white/5 transition-colors duration-300">
+                <h3 className="text-lg font-serif italic text-[#5A5A40] dark:text-[#A5A58D] mb-6">Add Manual Task</h3>
+                <form onSubmit={addTask} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="md:col-span-1">
+                    <input 
+                      type="text" 
+                      placeholder="Task title..."
+                      value={newTask.title}
+                      onChange={e => setNewTask(prev => ({ ...prev, title: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl bg-[#F5F5F0] dark:bg-white/5 border-transparent focus:bg-white dark:focus:bg-white/10 focus:border-[#5A5A40]/20 dark:focus:border-white/20 focus:ring-0 transition-all text-sm text-[#1A1A1A] dark:text-[#F5F5F0]"
+                    />
+                  </div>
+                  <div>
+                    <select 
+                      value={newTask.subjectId}
+                      onChange={e => setNewTask(prev => ({ ...prev, subjectId: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl bg-[#F5F5F0] dark:bg-white/5 border-transparent focus:bg-white dark:focus:bg-white/10 focus:border-[#5A5A40]/20 dark:focus:border-white/20 focus:ring-0 transition-all text-sm text-[#1A1A1A] dark:text-[#F5F5F0]"
+                    >
+                      <option value="">No Subject</option>
+                      {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <input 
+                      type="date" 
+                      value={newTask.date}
+                      onChange={e => setNewTask(prev => ({ ...prev, date: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl bg-[#F5F5F0] dark:bg-white/5 border-transparent focus:bg-white dark:focus:bg-white/10 focus:border-[#5A5A40]/20 dark:focus:border-white/20 focus:ring-0 transition-all text-sm text-[#1A1A1A] dark:text-[#F5F5F0] [color-scheme:light] dark:[color-scheme:dark]"
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    className="py-3 bg-[#5A5A40] dark:bg-[#A5A58D] text-white dark:text-[#1A1A1A] rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-[#4A4A30] dark:hover:bg-[#B5B59D] transition-colors text-sm"
+                  >
+                    <Plus size={16} />
+                    Add Task
+                  </button>
+                </form>
+              </div>
+
+              <div className="space-y-12">
+                {/* Group tasks by date */}
+                {Array.from(new Set(tasks.map(t => t.date))).sort().map((date: string) => {
+                  const dateTasks = tasks.filter(t => t.date === date);
+                  const isPast = differenceInDays(parseISO(date), new Date()) < 0 && !isToday(parseISO(date));
+                  
+                  return (
+                    <section key={date} className={cn("space-y-4", isPast && "opacity-50")}>
+                      <div className="flex items-center gap-4">
+                        <h3 className="text-xl font-serif italic text-[#5A5A40] dark:text-[#A5A58D]">
+                          {isToday(parseISO(date)) ? "Today" : format(parseISO(date), 'EEEE, MMM d')}
+                        </h3>
+                        <div className="h-px flex-1 bg-[#5A5A40]/10 dark:bg-white/10" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {dateTasks.map((task: StudyTask) => (
+                          <TaskItem key={task.id} task={task} onToggle={toggleTask} onDelete={deleteTask} />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+                {tasks.length === 0 && (
+                  <div className="text-center py-20 bg-white/50 dark:bg-white/5 rounded-[32px] border border-dashed border-[#5A5A40]/20 dark:border-white/10 transition-colors duration-300">
+                    <p className="text-[#5A5A40]/60 dark:text-[#A5A58D]/60 italic">No schedule generated yet. Add subjects first!</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'todos' && (
+            <motion.div 
+              key="todos"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-8"
+            >
+              <header>
+                <h2 className="text-4xl font-serif font-light text-[#1A1A1A] dark:text-[#F5F5F0]">To-Do List</h2>
+                <p className="text-[#5A5A40] dark:text-[#A5A58D] italic">Manage your daily non-study tasks.</p>
+              </header>
+
+              <div className="max-w-2xl">
+                <form onSubmit={addTodo} className="flex gap-4 mb-8">
+                  <input 
+                    type="text" 
+                    value={newTodoText}
+                    onChange={e => setNewTodoText(e.target.value)}
+                    placeholder="Add a new task..."
+                    className="flex-1 px-6 py-4 rounded-2xl bg-white dark:bg-[#2A2A2A] border border-black/5 dark:border-white/5 focus:ring-2 focus:ring-[#5A5A40]/20 dark:focus:ring-white/10 outline-none transition-all text-[#1A1A1A] dark:text-[#F5F5F0]"
+                  />
+                  <button 
+                    type="submit"
+                    className="px-8 py-4 bg-[#5A5A40] dark:bg-[#A5A58D] text-white dark:text-[#1A1A1A] rounded-2xl font-medium hover:bg-[#4A4A30] dark:hover:bg-[#B5B59D] transition-colors shadow-lg shadow-[#5A5A40]/20 dark:shadow-[#A5A58D]/10"
+                  >
+                    Add
+                  </button>
+                </form>
+
+                <div className="space-y-3">
+                  {todos.map(todo => (
+                    <TodoItem key={todo.id} todo={todo} onToggle={toggleTodo} onDelete={deleteTodo} isLarge />
+                  ))}
+                  {todos.length === 0 && (
+                    <div className="text-center py-20 bg-white/50 dark:bg-white/5 rounded-[32px] border border-dashed border-[#5A5A40]/20 dark:border-white/10 transition-colors duration-300">
+                      <p className="text-[#5A5A40]/60 dark:text-[#A5A58D]/60 italic">Your to-do list is empty. Start by adding a task above!</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+    </div>
+  );
+}
+
+function NavButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={cn(
+        "flex-1 md:flex-none flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+        active 
+          ? "bg-[#5A5A40] dark:bg-[#A5A58D] text-white dark:text-[#1A1A1A] shadow-lg shadow-[#5A5A40]/20 dark:shadow-[#A5A58D]/10" 
+          : "text-[#5A5A40]/60 dark:text-[#A5A58D]/60 hover:bg-[#5A5A40]/5 dark:hover:bg-white/5 hover:text-[#5A5A40] dark:hover:text-[#A5A58D]"
+      )}
+    >
+      {icon}
+      <span className="text-sm font-medium hidden md:inline">{label}</span>
+    </button>
+  );
+}
+
+function StatCard({ title, value, subtitle, color }: { title: string, value: string, subtitle: string, color: string }) {
+  return (
+    <div className={cn("p-6 rounded-[32px] border border-black/5 dark:border-white/5 shadow-sm transition-colors duration-300", color)}>
+      <p className="text-[10px] uppercase tracking-widest font-bold text-[#5A5A40]/60 dark:text-[#A5A58D]/60 mb-1">{title}</p>
+      <p className="text-3xl font-serif font-bold text-[#1A1A1A] dark:text-[#F5F5F0] mb-1">{value}</p>
+      <p className="text-xs text-[#5A5A40]/60 dark:text-[#A5A58D]/60 italic">{subtitle}</p>
+    </div>
+  );
+}
+
+interface TaskItemProps {
+  key?: React.Key;
+  task: StudyTask;
+  onToggle: (id: number) => void | Promise<void>;
+  onDelete?: (id: number) => void | Promise<void>;
+}
+
+function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
+  return (
+    <div className={cn(
+      "p-4 rounded-2xl flex items-center justify-between transition-all border group",
+      task.isCompleted 
+        ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 opacity-75" 
+        : "bg-white dark:bg-[#2A2A2A] border-black/5 dark:border-white/5 shadow-sm hover:shadow-md"
+    )}>
+      <div className="flex items-center gap-4">
+        <button 
+          onClick={() => onToggle(task.id)}
+          className={cn(
+            "transition-colors",
+            task.isCompleted ? "text-emerald-500" : "text-[#5A5A40]/20 dark:text-[#A5A58D]/20 hover:text-[#5A5A40]/40 dark:hover:text-[#A5A58D]/40"
+          )}
+        >
+          {task.isCompleted ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+        </button>
+        <div>
+          <p className={cn("font-medium", task.isCompleted && "line-through text-[#5A5A40]/40 dark:text-[#A5A58D]/40")}>
+            {task.subjectName}
+          </p>
+          <div className="flex items-center gap-2 text-xs text-[#5A5A40]/60 dark:text-[#A5A58D]/60">
+            <Clock size={12} />
+            <span>{task.durationMinutes} mins session</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {onDelete && (
+          <button 
+            onClick={() => onDelete(task.id)}
+            className="p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
+        <ChevronRight size={16} className="text-[#5A5A40]/20 dark:text-[#A5A58D]/20" />
+      </div>
+    </div>
+  );
+}
+
+interface TodoItemProps {
+  key?: React.Key;
+  todo: Todo;
+  onToggle: (id: number) => void | Promise<void>;
+  onDelete: (id: number) => void | Promise<void>;
+  isLarge?: boolean;
+}
+
+function TodoItem({ todo, onToggle, onDelete, isLarge }: TodoItemProps) {
+  return (
+    <div className={cn(
+      "group flex items-center justify-between rounded-2xl border border-black/5 dark:border-white/5 shadow-sm hover:shadow-md transition-all",
+      isLarge ? "p-5 bg-white dark:bg-[#2A2A2A]" : "p-4 bg-white/50 dark:bg-white/5",
+      todo.isCompleted && "opacity-60"
+    )}>
+      <div className="flex items-center gap-4">
+        <button 
+          onClick={() => onToggle(todo.id)}
+          className={cn(
+            "transition-colors",
+            todo.isCompleted ? "text-emerald-500" : "text-[#5A5A40]/20 dark:text-[#A5A58D]/20 hover:text-[#5A5A40]/40 dark:hover:text-[#A5A58D]/40"
+          )}
+        >
+          {todo.isCompleted ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+        </button>
+        <span className={cn(
+          "transition-all",
+          isLarge ? "text-lg" : "text-sm",
+          todo.isCompleted && "line-through text-[#5A5A40]/40 dark:text-[#A5A58D]/40"
+        )}>
+          {todo.text}
+        </span>
+      </div>
+      <button 
+        onClick={() => onDelete(todo.id)}
+        className="p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
+      >
+        <Trash2 size={isLarge ? 20 : 16} />
+      </button>
+    </div>
+  );
+}
